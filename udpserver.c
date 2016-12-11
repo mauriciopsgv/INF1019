@@ -18,6 +18,8 @@
 #include <stddef.h>
 
 #define BUFSIZE 1024
+#define TRUE 1
+#define FALSE 0
 extern  int alphasort(); 
 
 /*
@@ -28,28 +30,25 @@ void error(char *msg) {
   exit(1);
 }
 
-void create_directory(char *path, int pathSize, char *dirname, int dirSize)
+void create_directory(char *path, char *dirName)
 {   
-    char pathname[BUFSIZE];
+    char fullPath[BUFSIZE];
+    mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
 
-    if (getwd(pathname) == NULL )
+    if (getwd(fullPath) == NULL )
     {
       printf("Error getting path\n"); exit(0);
     }
-    printf("Current Working Directory = %s\n",pathname);
+    printf("Current Working Directory = %s\n",fullPath);
 
-    chdir(path);
+    strcat(fullPath, path);
+    strcat(fullPath, "/");
+    strcat(fullPath, dirName);
 
-    if (getwd(pathname) == NULL )
-    {
-      printf("Error getting path\n"); exit(0);
-    }
-    printf("Changed Working Directory = %s\n",pathname);
-
-    mkdir(dirname, S_IFDIR );
+    mkdir(fullPath, permissao);
 }
 
-void delete_directory(char *path, int pathSize, char *dirname, int dirSize)
+void delete_directory(char *path, char *dirname)
 {   
     char pathname[BUFSIZE];
 
@@ -70,12 +69,25 @@ void delete_directory(char *path, int pathSize, char *dirname, int dirSize)
     rmdir(dirname);
 }
 
+int select_all_files(const struct dirent *entry)
+{
+  if ((entry->d_type == DT_DIR) ||
+      (strcmp(entry->d_name, ".") == 0) || 
+      (strcmp(entry->d_name, "..") == 0) )  
+  {
+    return (FALSE); 
+  }
+  else
+  {
+    return (TRUE);
+  }
+}
+
 void show_directory_info(char *path, int pathSize)
 {   
     char pathname[BUFSIZE];
     int count,i; 
     struct direct **files; 
-    int file_select();
 
     if (getwd(pathname) == NULL ) 
     { 
@@ -84,7 +96,7 @@ void show_directory_info(char *path, int pathSize)
 
     printf("Current Working Directory = %s\n",pathname); 
 
-    count = scandir( pathname, &files, file_select, alphasort); 
+    count = scandir( pathname, &files, select_all_files, alphasort); 
 
     /* If no files found, make a non-selectable menu item */ 
     if (count <= 0) 
@@ -251,45 +263,45 @@ int main(int argc, char **argv) {
    */
   clientlen = sizeof(clientaddr);
 
-  while (1)
-  {
+  // while (1)
+  // {
 
-    /*
-     * recvfrom: receive a UDP datagram from a client
-     */
-    bzero(buff, BUFSIZE);
-    n = recvfrom(sockfd, buff, BUFSIZE, 0,
-		 (struct sockaddr *) &clientaddr, &clientlen);
-    if (n < 0)
-      error("ERROR in recvfrom");
+  //   /*
+  //    * recvfrom: receive a UDP datagram from a client
+  //    */
+  //   bzero(buff, BUFSIZE);
+  //   n = recvfrom(sockfd, buff, BUFSIZE, 0,
+		//  (struct sockaddr *) &clientaddr, &clientlen);
+  //   if (n < 0)
+  //     error("ERROR in recvfrom");
 
-    parse_buff(buff, &cmd, name);
-
-
-
-    /*
-     * gethostbyaddr: determine who sent the datagram
-     */
-    hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);
-    if (hostp == NULL)
-      error("ERROR on gethostbyaddr");
-    hostaddrp = inet_ntoa(clientaddr.sin_addr);
-    if (hostaddrp == NULL)
-      error("ERROR on inet_ntoa\n");
-    printf("server received datagram from %s (%s)\n",
-	   hostp->h_name, hostaddrp);
-    printf("server received %d/%d bytes: %s\n", strlen(buff), n, buff);
+  //   parse_buff(buff, &cmd, name);
 
 
-     //create_directory("/home/sambsj/Documents/T2SC/vsf", 1, "pathTest", 1);
+
+  //   /*
+  //    * gethostbyaddr: determine who sent the datagram
+  //    */
+  //   hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+  //   if (hostp == NULL)
+  //     error("ERROR on gethostbyaddr");
+  //   hostaddrp = inet_ntoa(clientaddr.sin_addr);
+  //   if (hostaddrp == NULL)
+  //     error("ERROR on inet_ntoa\n");
+  //   printf("server received datagram from %s (%s)\n",
+	 //   hostp->h_name, hostaddrp);
+  //   printf("server received %d/%d bytes: %s\n", strlen(buff), n, buff);
+
+
+     create_directory("/", "ultimateTeste");
      //delete_directory("/home/sambsj/Documents/T2SC/vsf", 1, "pathTest", 1);
 
     /*
      * sendto: echo the input back to the client
      */
-    n = sendto(sockfd, buff, strlen(buff), 0,
-	       (struct sockaddr *) &clientaddr, clientlen);
-    if (n < 0)
-      error("ERROR in sendto");
-  }
+  //   n = sendto(sockfd, buff, strlen(buff), 0,
+	 //       (struct sockaddr *) &clientaddr, clientlen);
+  //   if (n < 0)
+  //     error("ERROR in sendto");
+  // }
 }
