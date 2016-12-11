@@ -79,20 +79,23 @@ int select_all_files(const struct dirent *entry)
   }
 }
 
-void directory_show_info(char *path, int pathSize)
+void directory_show_info(char *path)
 {   
-    char pathname[BUFSIZE];
+    char fullPath[BUFSIZE];
     int count,i; 
     struct direct **files; 
 
-    if (getwd(pathname) == NULL ) 
+    if (getwd(fullPath) == NULL ) 
     { 
        printf("Error getting path\n"); exit(0); 
     }
 
-    printf("Current Working Directory = %s\n",pathname); 
+    printf("Current Working Directory = %s\n",fullPath);
 
-    count = scandir( pathname, &files, select_all_files, alphasort); 
+    strcat(fullPath, path);
+    printf("%s\n", fullPath);
+
+    count = scandir(fullPath, &files, select_all_files, alphasort); 
 
     /* If no files found, make a non-selectable menu item */ 
     if (count <= 0) 
@@ -290,7 +293,8 @@ int main(int argc, char **argv) {
 
 
      // directory_create("/", "dirToBeDeleted");
-     directory_delete("/dirTeste", "dirToBeDeleted");
+     // directory_show_info("/dirTeste");
+     // directory_delete("/dirTeste", "dirToBeDeleted");
 
     /*
      * sendto: echo the input back to the client
