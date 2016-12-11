@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/dir.h>
+#include <fcntl.h>
 #include <sys/param.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -28,6 +29,20 @@ extern  int alphasort();
 void error(char *msg) {
   perror(msg);
   exit(1);
+}
+
+int select_all_files(const struct dirent *entry)
+{
+  if ((entry->d_type == DT_DIR) ||
+      (strcmp(entry->d_name, ".") == 0) || 
+      (strcmp(entry->d_name, "..") == 0) )  
+  {
+    return (FALSE); 
+  }
+  else
+  {
+    return (TRUE);
+  }
 }
 
 void directory_create(char *path, char *dirName)
@@ -65,20 +80,6 @@ void directory_delete(char *path, char *dirName)
     rmdir(fullPath);
 }
 
-int select_all_files(const struct dirent *entry)
-{
-  if ((entry->d_type == DT_DIR) ||
-      (strcmp(entry->d_name, ".") == 0) || 
-      (strcmp(entry->d_name, "..") == 0) )  
-  {
-    return (FALSE); 
-  }
-  else
-  {
-    return (TRUE);
-  }
-}
-
 void directory_show_info(char *path)
 {   
     char fullPath[BUFSIZE];
@@ -109,6 +110,27 @@ void directory_show_info(char *path)
       printf("%s  ", files[i-1]->d_name);
 
     printf("\n"); /* flush buffer */ 
+}
+
+void file_read(char *path, char * payload, int offset, int numBytes)
+{
+    int fileDescriptor;
+    char fullPath[BUFSIZE];
+
+    if (getwd(fullPath) == NULL )
+    {
+      printf("Error getting path\n"); exit(0);
+    }
+    printf("Current Working Directory = %s\n",fullPath);
+
+    strcat(fullPath, path);
+
+    fileDescriptor = open(fullPath, O_RDONLY);
+
+    pread(fileDescriptor, payload, numBytes, offset);
+
+    printf("%s\n", payload);
+    return;
 }
 
 void remove_coma(char* str)
@@ -217,6 +239,9 @@ int main(int argc, char **argv) {
   char name[BUFSIZE];   // name of the file received from client
   int cmd;              // cmd received from client
 
+  char *payload;
+  payload = (char*) malloc (BUFSIZE * sizeof(char));
+
   /*
    * check command line arguments
    */
@@ -295,6 +320,8 @@ int main(int argc, char **argv) {
      // directory_create("/", "dirToBeDeleted");
      // directory_show_info("/dirTeste");
      // directory_delete("/dirTeste", "dirToBeDeleted");
+
+    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
 
     /*
      * sendto: echo the input back to the client
