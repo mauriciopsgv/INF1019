@@ -30,7 +30,7 @@ void error(char *msg) {
   exit(1);
 }
 
-void create_directory(char *path, char *dirName)
+void directory_create(char *path, char *dirName)
 {   
     char fullPath[BUFSIZE];
     mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
@@ -48,25 +48,21 @@ void create_directory(char *path, char *dirName)
     mkdir(fullPath, permissao);
 }
 
-void delete_directory(char *path, char *dirname)
+void directory_delete(char *path, char *dirName)
 {   
-    char pathname[BUFSIZE];
+    char fullPath[BUFSIZE];
 
-    if (getwd(pathname) == NULL )
+    if (getwd(fullPath) == NULL )
     {
       printf("Error getting path\n"); exit(0);
     }
-    printf("Current Working Directory = %s\n",pathname);
+    printf("Current Working Directory = %s\n",fullPath);
 
-    chdir(path);
+    strcat(fullPath, path);
+    strcat(fullPath, "/");
+    strcat(fullPath, dirName);
 
-    if (getwd(pathname) == NULL )
-    {
-      printf("Error getting path\n"); exit(0);
-    }
-    printf("Changed Working Directory = %s\n",pathname);
-
-    rmdir(dirname);
+    rmdir(fullPath);
 }
 
 int select_all_files(const struct dirent *entry)
@@ -83,7 +79,7 @@ int select_all_files(const struct dirent *entry)
   }
 }
 
-void show_directory_info(char *path, int pathSize)
+void directory_show_info(char *path, int pathSize)
 {   
     char pathname[BUFSIZE];
     int count,i; 
@@ -293,8 +289,8 @@ int main(int argc, char **argv) {
   //   printf("server received %d/%d bytes: %s\n", strlen(buff), n, buff);
 
 
-     create_directory("/", "ultimateTeste");
-     //delete_directory("/home/sambsj/Documents/T2SC/vsf", 1, "pathTest", 1);
+     // directory_create("/", "dirToBeDeleted");
+     directory_delete("/dirTeste", "dirToBeDeleted");
 
     /*
      * sendto: echo the input back to the client
