@@ -133,6 +133,27 @@ void file_read(char *path, char * payload, int offset, int numBytes)
     return;
 }
 
+int file_info(char *path)
+{
+    struct stat sb;
+
+    char fullPath[BUFSIZE];
+
+    if (getwd(fullPath) == NULL ) 
+    { 
+       printf("Error getting path\n"); exit(0); 
+    }
+
+    printf("Current Working Directory = %s\n",fullPath);
+
+    strcat(fullPath, path);
+
+    stat(fullPath, &sb);
+    printf("%d\n", sb.st_size);
+
+    return sb.st_size;
+}
+
 void remove_coma(char* str)
 {
     char *pr = str, *pw = str;
@@ -321,7 +342,8 @@ int main(int argc, char **argv) {
      // directory_show_info("/dirTeste");
      // directory_delete("/dirTeste", "dirToBeDeleted");
 
-    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
+    // file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
+    // file_info("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt");
 
     /*
      * sendto: echo the input back to the client
