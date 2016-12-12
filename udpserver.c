@@ -269,8 +269,8 @@ int main(int argc, char **argv) {
   char name[BUFSIZE];   // name of the file received from client
   int cmd;              // cmd received from client
 
-  char *payload;
-  payload = (char*) malloc (BUFSIZE * sizeof(char));
+  char payloadToWrite[BUFSIZE];
+  char payloadToRead[BUFSIZE];
 
   /*
    * check command line arguments
@@ -351,11 +351,11 @@ int main(int argc, char **argv) {
      // directory_show_info("/");
      // directory_delete("/", "dirToBeDeleted");
 
-    strcpy(payload, "lindo");
+    strcpy(payloadToWrite, "lindo");
 
-    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
-    file_write("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
-    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
+    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payloadToRead, 7, 5);
+    file_write("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payloadToWrite, 7, 5);
+    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payloadToRead, 7, 5);
 
     // file_info("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt");
 
