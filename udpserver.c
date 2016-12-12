@@ -45,33 +45,41 @@ int select_all_files(const struct dirent *entry)
   }
 }
 
-void directory_create(char *path, char *dirName)
-{   
-    char fullPath[BUFSIZE];
-    mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
+char * get_current_directory()
+{
+    char* currentDir;
 
-    if (getwd(fullPath) == NULL )
+    currentDir = (char *) malloc (BUFSIZE * sizeof(char));
+
+    if (getwd(currentDir) == NULL )
     {
       printf("Error getting path\n"); exit(0);
     }
-    printf("Current Working Directory = %s\n",fullPath);
+    printf("Current Working Directory = %s\n",currentDir);
+
+    return currentDir;
+}
+
+void directory_create(char *path, char *dirName)
+{   
+    char *fullPath;
+    mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
+    
+    fullPath = get_current_directory();
 
     strcat(fullPath, path);
     strcat(fullPath, "/");
     strcat(fullPath, dirName);
 
     mkdir(fullPath, permissao);
+    free(fullPath);
 }
 
 void directory_delete(char *path, char *dirName)
 {   
-    char fullPath[BUFSIZE];
+    char *fullPath;
 
-    if (getwd(fullPath) == NULL )
-    {
-      printf("Error getting path\n"); exit(0);
-    }
-    printf("Current Working Directory = %s\n",fullPath);
+    fullPath = get_current_directory();
 
     strcat(fullPath, path);
     strcat(fullPath, "/");
@@ -82,16 +90,11 @@ void directory_delete(char *path, char *dirName)
 
 void directory_show_info(char *path)
 {   
-    char fullPath[BUFSIZE];
+    char *fullPath;
     int count,i; 
     struct direct **files; 
 
-    if (getwd(fullPath) == NULL ) 
-    { 
-       printf("Error getting path\n"); exit(0); 
-    }
-
-    printf("Current Working Directory = %s\n",fullPath);
+    fullPath = get_current_directory();
 
     strcat(fullPath, path);
     printf("%s\n", fullPath);
@@ -115,13 +118,9 @@ void directory_show_info(char *path)
 void file_read(char *path, char * payload, int offset, int numBytes)
 {
     int fileDescriptor;
-    char fullPath[BUFSIZE];
+    char *fullPath;
 
-    if (getwd(fullPath) == NULL )
-    {
-      printf("Error getting path\n"); exit(0);
-    }
-    printf("Current Working Directory = %s\n",fullPath);
+    fullPath = get_current_directory();
 
     strcat(fullPath, path);
 
@@ -133,23 +132,33 @@ void file_read(char *path, char * payload, int offset, int numBytes)
     return;
 }
 
+void file_write(char *path, char * payload, int offset, int numBytes)
+{
+    int fileDescriptor;
+    char *fullPath;
+
+    fullPath = get_current_directory();
+
+    strcat(fullPath, path);
+
+    fileDescriptor = open(fullPath, O_WRONLY);
+
+    pwrite(fileDescriptor, payload, numBytes, offset);
+
+    printf("%s\n", payload);
+    return;
+}
+
 int file_info(char *path)
 {
     struct stat sb;
+    char *fullPath;
 
-    char fullPath[BUFSIZE];
-
-    if (getwd(fullPath) == NULL ) 
-    { 
-       printf("Error getting path\n"); exit(0); 
-    }
-
-    printf("Current Working Directory = %s\n",fullPath);
+    fullPath = get_current_directory();
 
     strcat(fullPath, path);
 
     stat(fullPath, &sb);
-    printf("%d\n", sb.st_size);
 
     return sb.st_size;
 }
@@ -339,10 +348,15 @@ int main(int argc, char **argv) {
 
 
      // directory_create("/", "dirToBeDeleted");
-     // directory_show_info("/dirTeste");
-     // directory_delete("/dirTeste", "dirToBeDeleted");
+     // directory_show_info("/");
+     // directory_delete("/", "dirToBeDeleted");
 
-    // file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
+    strcpy(payload, "lindo");
+
+    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
+    file_write("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
+    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payload, 7, 5);
+
     // file_info("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt");
 
     /*
