@@ -17,11 +17,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stddef.h>
+#include "lista.h"
 
 #define BUFSIZE 1024
 #define TRUE 1
 #define FALSE 0
 extern  int alphasort(); 
+
+char* responseBuffer;
 
 /*
  * error - wrapper for perror
@@ -55,37 +58,62 @@ char * get_current_directory()
     {
       printf("Error getting path\n"); exit(0);
     }
-    printf("Current Working Directory = %s\n",currentDir);
 
     return currentDir;
 }
 
-void directory_create(char *path, char *dirName)
+Lista * create_initial_directory(Lista * root)
+{
+    char *fullPath;
+    mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
+    
+    fullPath = get_current_directory();
+
+    strcat(fullPath, "/SFS-root-di");
+
+    mkdir(fullPath, permissao);
+    root = lista_add(root, "/", -1, 'W', 'W');
+    chdir(fullPath);
+    free(fullPath);
+
+    return root;
+}
+
+int doIHavePermission(char myIntention, char entryPermission)
+{
+  if ( entryPermission == 'W' )
+  {
+    return TRUE;
+  }
+  else if ( myIntention == 'W')
+  {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+Lista * directory_create(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char *dirName)
 {   
     char *fullPath;
     mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
     
     fullPath = get_current_directory();
 
+    strcat(fullPath, "/SFS-root-di");
     strcat(fullPath, path);
-    strcat(fullPath, "/");
+
+    if(strcmp(path, "/") != 0)
+    {
+      strcat(fullPath, "/");
+    }
+    
     strcat(fullPath, dirName);
 
     mkdir(fullPath, permissao);
+    root = lista_add(root, fullPath, cliente, owner_permission, other_permission);
     free(fullPath);
-}
 
-void directory_delete(char *path, char *dirName)
-{   
-    char *fullPath;
-
-    fullPath = get_current_directory();
-
-    strcat(fullPath, path);
-    strcat(fullPath, "/");
-    strcat(fullPath, dirName);
-
-    rmdir(fullPath);
+    return root;
 }
 
 void directory_show_info(char *path)
@@ -115,38 +143,99 @@ void directory_show_info(char *path)
     printf("\n"); /* flush buffer */ 
 }
 
-void file_read(char *path, char * payload, int offset, int numBytes)
-{
-    int fileDescriptor;
+Lista * directory_delete(Lista * root, char *path, char *dirName)
+{   
     char *fullPath;
 
     fullPath = get_current_directory();
 
+    strcat(fullPath, "/SFS-root-di");
+    strcat(fullPath, path);
+   
+    if(strcmp(path, "/") != 0)
+    {
+      strcat(fullPath, "/");
+    }
+   
+    strcat(fullPath, dirName);
+
+    rmdir(fullPath);
+    root = lista_delete(root, fullPath);
+    free(fullPath);
+
+    return root;
+}
+
+Lista * file_create(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char * payload, int numBytes)
+{
+    int fileDescriptor;
+    char *fullPath;
+    mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
+
+
+    fullPath = get_current_directory();
+
+    strcat(fullPath, path);
+
+    fileDescriptor = open(fullPath, O_CREAT | O_WRONLY, permissao);
+
+    write(fileDescriptor, payload, numBytes);
+
+    root = lista_add(root, fullPath, cliente, owner_permission, other_permission);
+    close(fileDescriptor);
+    return root;
+}
+
+void file_read(Lista * root, int cliente, char *path, char * payload, int offset, int numBytes)
+{
+    int i, fileDescriptor;
+    char *fullPath;
+    char entryPermission;
+
+
+
+    fullPath = get_current_directory();
+    
     strcat(fullPath, path);
 
     fileDescriptor = open(fullPath, O_RDONLY);
-
     pread(fileDescriptor, payload, numBytes, offset);
 
-    printf("%s\n", payload);
-    return;
+    // printf("%s\n", payload);
+
+    for (i = 0; i < numBytes; i++)
+    {
+      printf("%c", payload[i]);
+    }
+
+    printf("\n");
+   close(fileDescriptor);
 }
 
-void file_write(char *path, char * payload, int offset, int numBytes)
+void file_write(Lista * root, int cliente, char *path, char * payload, int offset, int numBytes)
 {
     int fileDescriptor;
+    char entryPermission;
     char *fullPath;
 
     fullPath = get_current_directory();
 
     strcat(fullPath, path);
+
+    entryPermission = lista_get_entry_permission(root, fullPath, cliente);
+
+    printf("Entry permission is %c\n", entryPermission);
+
+    if(!doIHavePermission('W',entryPermission))
+    {
+      printf("Voce nao tem permissao para escrever nesse arquivo\n");
+      return;
+    }
 
     fileDescriptor = open(fullPath, O_WRONLY);
 
     pwrite(fileDescriptor, payload, numBytes, offset);
-
-    printf("%s\n", payload);
-    return;
+    close(fileDescriptor);
 }
 
 int file_info(char *path)
@@ -160,7 +249,52 @@ int file_info(char *path)
 
     stat(fullPath, &sb);
 
+    printf("Tamanho do arquivo: %d\n ", sb.st_size);
     return sb.st_size;
+}
+
+Lista * file_delete(Lista * root, char *path)
+{
+    int success;
+    char *fullPath;
+
+    fullPath = get_current_directory();
+
+    strcat(fullPath, path);
+
+    success = remove(fullPath);
+    if(success == -1)
+    {
+      printf("Failed to delete %s\n", path);
+    }
+    root = lista_delete(root, fullPath);
+}
+
+Lista * file_modify(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char * parentPath, char * payload, int offset, int numBytes)
+{
+  printf(" PARENT PATH .... %s\n", parentPath);
+  printf(" CHILD PATH .... %s\n", path);
+  printf("%d\n", offset);
+  if (numBytes == 0)
+  {
+    printf("Vou deletar\n");
+    root = file_delete(root, path);
+  }
+  else if (lista_seek(root, path))
+  {
+    printf("Cheguei pra escrever\n");
+    file_write(root, cliente, path, payload, offset, numBytes);
+  }
+  else if (lista_seek(root, "/"))
+  {
+    printf("lugar certo \n");
+    root = file_create(root, cliente, owner_permission, other_permission, path, payload, numBytes);
+  }
+  else
+  {
+    printf("Arquivo nao encontrado\n");
+  }
+  return root;
 }
 
 void remove_coma(char* str)
@@ -175,13 +309,63 @@ void remove_coma(char* str)
     *pw = '\0';
 }
 
-void parse_buff (char *buff, int *cmd, char *name)
+
+char* parentDirectory( char* path, int pathLength )
+{
+  int i = 0;
+  int slashIndex;
+  char* parent;
+
+  while( i < pathLength )
+  {
+    if(path[i] == '/')
+      slashIndex = i;
+
+    i++;
+  }
+
+  i = 0;
+  parent = (char*)malloc(sizeof(char)*slashIndex+1);
+
+  while( i <= slashIndex)
+  {
+    parent[i] = path[i];
+    i++;
+  }
+  return parent;
+} 
+
+Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
 {
     const char delimiters[] = " ";
     char *running;
 
 
     char *command;
+    char *path;
+    char *pathLengthStr;
+    int pathLength;
+
+    //Arquivo
+    char *payload;
+    char *nrBytesStr;
+    int nrBytes;
+    char *offsetStr;
+    int offset;
+    char* parentPath;
+
+    char *clientIdStr;
+    int clientId;
+    //Diretório
+
+    char* ownerPermissionStr;
+    char* otherPermissionStr;
+
+    char* dirName;
+    char* dirNameLengthStr;
+    int dirNameLength;
+
+    int fileLength;
 
     running = strdup(buff);
 
@@ -193,65 +377,187 @@ void parse_buff (char *buff, int *cmd, char *name)
     //MANIPULACAO DE ARQUIVOS
     if( strcmp(command, "RD-REQ") == 0 )
     {
-        printf("oi");
-    }
+        //printf("oi");
+        path =  strsep(&running, delimiters);
+        remove_coma(path);
 
-    if( strcmp(command, "RD-REP") == 0)
-    {
-        printf("oi");
+        pathLengthStr = strsep(&running, delimiters);
+        remove_coma(pathLengthStr);
+        pathLength = atoi(pathLengthStr);
+
+        payload = strsep(&running, delimiters);
+        remove_coma(payload);
+
+        nrBytesStr = strsep(&running, delimiters);
+        remove_coma(nrBytesStr);
+        nrBytes = atoi(nrBytesStr);
+
+        offsetStr = strsep(&running, delimiters);
+        remove_coma(offsetStr);
+        offset = atoi(offsetStr);
+
+        clientIdStr = strsep(&running, delimiters);
+        remove_coma(clientIdStr);
+        clientId = atoi(clientIdStr);
+
+        file_read(root, clientId, path, payload, offset, nrBytes);
+
+
+        responseBuffer = strcat(responseBuffer, "RD-REP, ");
+        responseBuffer = strcat(responseBuffer, path);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, pathLengthStr );
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, payload);
+        responseBuffer = strcat(responseBuffer, ", ");
+        //not sure of nrBytes
+        responseBuffer = strcat(responseBuffer, nrBytesStr);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, offsetStr);
     }
 
     if( strcmp(command, "WR-REQ") == 0 )
     {
-        printf("oi");
-    }
+        //printf("oi");
+        path =  strsep(&running, delimiters);
+        remove_coma(path);
 
-    if( strcmp(command, "WR-REP") == 0 )
-    {
-        printf("oi");
+        pathLengthStr = strsep(&running, delimiters);
+        remove_coma(pathLengthStr);
+        pathLength = atoi(pathLengthStr);
+
+        payload = strsep(&running, delimiters);
+        remove_coma(payload);
+
+        nrBytesStr = strsep(&running, delimiters);
+        remove_coma(nrBytesStr);
+        nrBytes = atoi(nrBytesStr);
+
+        offsetStr = strsep(&running, delimiters);
+        remove_coma(offsetStr);
+        offset = atoi(offsetStr);
+
+        clientIdStr = strsep(&running, delimiters);
+        remove_coma(clientIdStr);
+        clientId = atoi(clientIdStr);
+
+        ownerPermissionStr = strsep(&running, delimiters);
+        remove_coma(ownerPermissionStr);
+
+        otherPermissionStr = strsep(&running, delimiters);
+        remove_coma(otherPermissionStr);
+
+        parentPath = parentDirectory(path, pathLength);
+
+        root = file_modify(root, clientId, ownerPermissionStr[0], otherPermissionStr[0], path, parentPath, payload, offset, nrBytes);
+
+        responseBuffer = strcat(responseBuffer, "WR-REP, ");
+        responseBuffer = strcat(responseBuffer, path);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, pathLengthStr );
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, " ");
+        responseBuffer = strcat(responseBuffer, ", ");
+        //not sure of nrBytes
+        responseBuffer = strcat(responseBuffer, nrBytesStr);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, offsetStr);
+          //free(parentPath);
     }
 
     if( strcmp(command, "FI-REQ") == 0 )
     {
-        printf("oi");
-    }
+        path =  strsep(&running, delimiters);
+        remove_coma(path);
 
-    if( strcmp(command, "FI-REQ") == 0 )
-    {
-        printf("oi");
+        pathLengthStr = strsep(&running, delimiters);
+        remove_coma(pathLengthStr);
+        pathLength = atoi(pathLengthStr);
+        
+        fileLength = file_info(path);        
     }
 
     //MANIPULACAO DE DIRETORIOS
     if( strcmp(command, "DC-REQ") == 0 )
     {
-        //create_directory();
-    }
+          //create_directory();
+        //Lista * directory_create(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char *dirName)
+        path =  strsep(&running, delimiters);
+        remove_coma(path);
 
-    if( strcmp(command, "DC-REP") == 0 )
-    {
-        printf("TO-DO");
+        pathLengthStr = strsep(&running, delimiters);
+        remove_coma(pathLengthStr);
+        pathLength = atoi(pathLengthStr);
+        
+        dirName = strsep(&running, delimiters);
+        remove_coma(dirName);
+
+        dirNameLengthStr = strsep(&running, delimiters);
+        remove_coma(dirNameLengthStr);
+        dirNameLength = atoi(dirNameLengthStr);
+
+        clientIdStr = strsep(&running, delimiters);
+        remove_coma(clientIdStr);
+        clientId = atoi(clientIdStr);
+
+        ownerPermissionStr = strsep(&running, delimiters);
+        remove_coma(ownerPermissionStr);
+
+        otherPermissionStr = strsep(&running, delimiters);
+        remove_coma(otherPermissionStr);
+
+        root = directory_create(root, clientId, ownerPermissionStr[0], otherPermissionStr[0], path, dirName);
     }
 
     if( strcmp(command, "DR-REQ") == 0 )
-    {
+    {       
         //delete_directory();
-    }
 
-    if( strcmp(command, "DR-REP") == 0 )
-    {
-        printf("TO-DO");
+          //Lista * directory_delete(Lista * root, char *path, char *dirName)
+        path =  strsep(&running, delimiters);
+        remove_coma(path);
+
+        pathLengthStr = strsep(&running, delimiters);
+        remove_coma(pathLengthStr);
+        pathLength = atoi(pathLengthStr);
+        
+        dirName = strsep(&running, delimiters);
+        remove_coma(dirName);
+
+        dirNameLengthStr = strsep(&running, delimiters);
+        remove_coma(dirNameLengthStr);
+        dirNameLength = atoi(dirNameLengthStr);
+        
+        /*
+        clientIdStr = strsep(&running, delimiters);
+        remove_coma(clientIdStr);
+        clientId = atoi(clientIdStr);
+
+        */
+        root = directory_delete(root, path, dirName);
     }
 
     if( strcmp(command, "DL-REQ") == 0 )
     {
-        printf("TO-DO");
+        //void directory_show_info(char *path)
+        path =  strsep(&running, delimiters);
+        remove_coma(path);
+
+        pathLengthStr = strsep(&running, delimiters);
+        remove_coma(pathLengthStr);
+        pathLength = atoi(pathLengthStr);
+        
+
+        /*
+        clientIdStr = strsep(&running, delimiters);
+        remove_coma(clientIdStr);
+        clientId = atoi(clientIdStr);
+        */
+
+        directory_show_info(path);
     }
 
-    if( strcmp(command, "DL-REQ") == 0 )
-    {
-        printf("TO-DO");
-    }
-
+    return root;
 }
 
 int main(int argc, char **argv) {
@@ -269,8 +575,14 @@ int main(int argc, char **argv) {
   char name[BUFSIZE];   // name of the file received from client
   int cmd;              // cmd received from client
 
-  char payloadToWrite[BUFSIZE];
+  //char responseBuff[BUFSIZE];
+  char payloadToWriteFirst[BUFSIZE];
+  char payloadToWriteSecond[BUFSIZE];
   char payloadToRead[BUFSIZE];
+  char payloadToRead2[BUFSIZE];
+  char payloadToRead3[BUFSIZE];
+
+  Lista * root;
 
   /*
    * check command line arguments
@@ -317,54 +629,80 @@ int main(int argc, char **argv) {
    */
   clientlen = sizeof(clientaddr);
 
-  // while (1)
-  // {
+  root = lista_cria();
+  root = create_initial_directory(root);
 
-  //   /*
-  //    * recvfrom: receive a UDP datagram from a client
-  //    */
-  //   bzero(buff, BUFSIZE);
-  //   n = recvfrom(sockfd, buff, BUFSIZE, 0,
-		//  (struct sockaddr *) &clientaddr, &clientlen);
-  //   if (n < 0)
-  //     error("ERROR in recvfrom");
+  while (1)
+  {
 
-  //   parse_buff(buff, &cmd, name);
+    /*
+     * recvfrom: receive a UDP datagram from a client
+     */
+    bzero(buff, BUFSIZE);
+    n = recvfrom(sockfd, buff, BUFSIZE, 0,
+		 (struct sockaddr *) &clientaddr, &clientlen);
+    if (n < 0)
+      error("ERROR in recvfrom");
 
-
-
-  //   /*
-  //    * gethostbyaddr: determine who sent the datagram
-  //    */
-  //   hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);
-  //   if (hostp == NULL)
-  //     error("ERROR on gethostbyaddr");
-  //   hostaddrp = inet_ntoa(clientaddr.sin_addr);
-  //   if (hostaddrp == NULL)
-  //     error("ERROR on inet_ntoa\n");
-  //   printf("server received datagram from %s (%s)\n",
-	 //   hostp->h_name, hostaddrp);
-  //   printf("server received %d/%d bytes: %s\n", strlen(buff), n, buff);
+    lista_print(root);
+    root = parse_buff(buff, &cmd, name, root);
 
 
-     // directory_create("/", "dirToBeDeleted");
+
+    /*
+     * gethostbyaddr: determine who sent the datagram
+     */
+    hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+    if (hostp == NULL)
+      error("ERROR on gethostbyaddr");
+    hostaddrp = inet_ntoa(clientaddr.sin_addr);
+    if (hostaddrp == NULL)
+      error("ERROR on inet_ntoa\n");
+    printf("server received datagram from %s (%s)\n",
+	   hostp->h_name, hostaddrp);
+    printf("server received %d/%d bytes: %s\n", strlen(buff), n, buff);
+
+     // lista_print(root);
+     // root = directory_create("/", "dirToBeDeleted", root);
+     // lista_print(root);
      // directory_show_info("/");
-     // directory_delete("/", "dirToBeDeleted");
+     // root = directory_delete("/", "dirToBeDeleted", root);
+     // lista_print(root);
 
-    strcpy(payloadToWrite, "lindo");
+  
+    //strcpy(payloadToWriteFirst, "manda");
+   // strcpy(payloadToWriteSecond, " nudes");
+  
+    // file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payloadToRead, 7, 5);
+    // file_write("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payloadToWrite, 7, 5);
+    // file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payloadToRead, 7, 5);
 
-    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payloadToRead, 7, 5);
-    file_write("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payloadToWrite, 7, 5);
-    file_read("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt", payloadToRead, 7, 5);
+    // lista_print(root);
+    // root = file_create(root, 1, 'W', 'R' , "/mandaNudes", payloadToWriteFirst, 5);
+    // lista_print(root);
+    // printf("Cliente 1 lendo\n");
+    // file_read(root, 1, "/mandaNudes", payloadToRead, 0, 5);
+    // printf("Cliente 1 escrevendo\n");
+    // file_write(root, 1, "/mandaNudes", payloadToWriteSecond, 5, 6);
+    // printf("Cliente 1 lendo\n");
+    // file_read(root, 1, "/mandaNudes", payloadToRead2, 0, 11);
+    // printf("Cliente 2 escrevendo\n");
+    // file_write(root, 2, "/mandaNudes", payloadToWriteSecond, 0, 6);
+    // printf("Cliente 2 lendo\n");
+    // file_read(root, 2, "/mandaNudes", payloadToRead3, 0, 11);
+    // root = file_delete(root, "/mandaNudes");
+    // lista_print(root);
 
     // file_info("/dirTeste/ultimateTeste/ultimateArquivoTeste.txt");
 
     /*
      * sendto: echo the input back to the client
      */
-  //   n = sendto(sockfd, buff, strlen(buff), 0,
-	 //       (struct sockaddr *) &clientaddr, clientlen);
-  //   if (n < 0)
-  //     error("ERROR in sendto");
-  // }
+    n = sendto(sockfd, responseBuffer, strlen(responseBuffer), 0,
+	       (struct sockaddr *) &clientaddr, clientlen);
+    if (n < 0)
+      error("ERROR in sendto");
+
+   memset(responseBuffer,0,strlen(responseBuffer)); 
+  }
 }
