@@ -100,6 +100,7 @@ void parse_buff (char *buff)
 
     int i = 0;
     int j = 0;
+    int k = 0;
 
     running = strdup(buff);
 
@@ -110,7 +111,6 @@ void parse_buff (char *buff)
     //MANIPULACAO DE ARQUIVOS
     if( strcmp(command, "RD-REP") == 0 )
     {
-        //printf("oi");
         path =  strsep(&running, delimiters);
         remove_coma(path);
         printf("\n");
@@ -125,15 +125,21 @@ void parse_buff (char *buff)
 
         payload = strsep(&running, delimiters);
         remove_coma(payload);
-        printf("Payload: %s", payload); 
-        printf("\n");
-
+       
         nrBytesStr = strsep(&running, delimiters);
         remove_coma(nrBytesStr);
         //gambiarra
         nrBytesNOBUGEDStr = (char*)malloc(sizeof(char)*strlen(nrBytesStr));
         strcpy(nrBytesNOBUGEDStr, nrBytesStr);
         nrBytes = atoi(nrBytesStr);
+
+        printf("Payload: ");
+        for(k = 0; k < nrBytes; k++)
+        {
+            printf("%c", payload[k]);
+        } 
+        printf("\n");
+
         printf("Número de Bytes Lidos: %s", nrBytesStr); 
         printf("\n");
 
@@ -157,7 +163,6 @@ void parse_buff (char *buff)
 
     if( strcmp(command, "WR-REP") == 0 )
     {
-        //printf("oi");
         path =  strsep(&running, delimiters);
         remove_coma(path);
         printf("\n");

@@ -73,8 +73,10 @@ Lista * create_initial_directory(Lista * root)
     strcat(fullPath, "/SFS-root-di");
 
     mkdir(fullPath, permissao);
-    root = lista_add(root, "/", -1, 'W', 'W');
     chdir(fullPath);
+
+    strcat(fullPath, "/"); 
+    root = lista_add(root, fullPath, -1, 'W', 'W');
     free(fullPath);
 
     return root;
@@ -99,9 +101,6 @@ Lista * directory_create(Lista * root, int cliente, char owner_permission, char 
     mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
 
     fullPath = get_current_directory();
-
-
-    //strcat(fullPath, "/SFS-root-di");
 
     strcat(fullPath, path);
 
@@ -336,29 +335,35 @@ Lista * file_delete(Lista * root, char *path)
 
 Lista * file_modify(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char * parentPath, char * payload, int offset, int numBytes)
 {
-  printf(" PARENT PATH .... %s\n", parentPath);
-  printf(" CHILD PATH .... %s\n", path);
-  printf("%d\n", offset);
-  if (numBytes == 0)
-  {
-    printf("Vou deletar\n");
-    root = file_delete(root, path);
-  }
-  else if (lista_seek(root, path))
-  {
-    printf("Cheguei pra escrever\n");
-    file_write(root, cliente, path, payload, offset, numBytes);
-  }
-  else if (lista_seek(root, "/"))
-  {
-    printf("lugar certo \n");
-    root = file_create(root, cliente, owner_permission, other_permission, path, payload, numBytes);
-  }
-  else
-  {
-    printf("Arquivo nao encontrado\n");
-  }
-  return root;
+    char * fullParentPath, *fullChildPath;
+
+    fullParentPath = get_current_directory();
+    fullChildPath = get_current_directory();
+
+    printf(" PARENT PATH .... %s\n", parentPath);
+    printf(" CHILD PATH .... %s\n", path);
+
+    strcat(fullParentPath, parentPath);
+    strcat(fullChildPath, path);
+
+    if (numBytes == 0)
+    {
+        printf("Vou deletar\n");
+        root = file_delete(root, path);
+    }
+    else if (lista_seek(root, fullChildPath))
+    {
+        file_write(root, cliente, path, payload, offset, numBytes);
+    }
+    else if (lista_seek(root, fullParentPath))
+    {
+        root = file_create(root, cliente, owner_permission, other_permission, path, payload, numBytes);
+    }
+    else
+    {
+        printf("Arquivo nao encontrado\n");
+    }
+    return root;
 }
 
 void remove_coma(char* str)
@@ -403,7 +408,7 @@ char* parentDirectory( char* path, int pathLength )
 
   i = 0;
 
-  while( i < slashIndex)
+  while( i <= slashIndex)
   {
     parent[i] = path[i];
     i++;
