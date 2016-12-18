@@ -19,6 +19,8 @@ int lista_seek(Lista * lista, char *path);
 
 Lista * lista_delete(Lista * lista, char *path);
 
+int lista_get_entry_client(Lista * lista, char * path);
+
 char lista_get_entry_permission(Lista * lista, char * path, int cliente);
 
 void lista_print(Lista * lista);

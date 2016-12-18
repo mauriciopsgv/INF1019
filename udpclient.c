@@ -229,7 +229,7 @@ void parse_buff (char *buff)
         permissions = strsep(&running, delimiters);
         remove_coma(permissions);
         printf("\n");
-        printf("Permissions: %s", permissions); 
+        printf("Permissions: %c%c%c", permissions[0], permissions[1], permissions[2]); 
         printf("\n");
 
         fileLengthStr = strsep(&running, delimiters);

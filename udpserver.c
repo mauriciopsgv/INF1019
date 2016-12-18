@@ -63,6 +63,28 @@ char * get_current_directory()
     return currentDir;
 }
 
+int get_owner(Lista * root, char * path)
+{
+    char * fullPath;
+    
+    fullPath = get_current_directory();
+
+    strcat(fullPath, path);
+
+    return lista_get_entry_client(root, fullPath);
+}
+
+char get_permission(Lista * root, char * path, int cliente)
+{
+    char * fullPath;
+    
+    fullPath = get_current_directory();
+
+    strcat(fullPath, path);
+
+    return lista_get_entry_permission(root, fullPath, cliente);
+}
+
 Lista * create_initial_directory(Lista * root)
 {
     char *fullPath;
@@ -97,12 +119,22 @@ int doIHavePermission(char myIntention, char entryPermission)
 
 Lista * directory_create(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char *dirName)
 {   
+    char entryPermission;
     char *fullPath;
     mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
 
     fullPath = get_current_directory();
 
     strcat(fullPath, path);
+
+    entryPermission = lista_get_entry_permission(root, fullPath, cliente);
+
+    if(!doIHavePermission('W',entryPermission))
+    {
+      printf("Voce nao tem permissao para criar um diretorio nesse diretorio\n");
+      free(fullPath);
+      return root;
+    }
 
     if(strcmp(path, "/") != 0)
     {
@@ -203,14 +235,23 @@ void directory_show_info(char *path)
     printf("\n"); /* flush buffer */ 
 }
 
-Lista * directory_delete(Lista * root, char *path, char *dirName)
+Lista * directory_delete(Lista * root, int cliente, char *path, char *dirName)
 {   
+    char entryPermission;
     char *fullPath;
 
     fullPath = get_current_directory();
 
-    //strcat(fullPath, "/SFS-root-di");
     strcat(fullPath, path);
+
+    entryPermission = lista_get_entry_permission(root, fullPath, cliente);
+
+    if(!doIHavePermission('W',entryPermission))
+    {
+      printf("Voce nao tem permissao para deletar um diretorio nesse diretorio\n");
+      free(fullPath);
+      return root;
+    }
    
     if(strcmp(path, "/") != 0)
     {
@@ -228,23 +269,38 @@ Lista * directory_delete(Lista * root, char *path, char *dirName)
     return root;
 }
 
-Lista * file_create(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char * payload, int numBytes)
+Lista * file_create(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char *parentPath, char * payload, int numBytes)
 {
     int fileDescriptor;
-    char *fullPath;
+    char entryPermission;
+    char *fullPath, * fullParentPath;
     mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
 
 
     fullPath = get_current_directory();
+    fullParentPath = get_current_directory();
 
     strcat(fullPath, path);
+    strcat(fullParentPath, parentPath);
 
+    entryPermission = lista_get_entry_permission(root, fullParentPath, cliente);
+
+    if(!doIHavePermission('W',entryPermission))
+    {
+      printf("Voce nao tem permissao para criar um arquivo nesse diretorio\n");
+      free(fullPath);
+      free(fullParentPath);
+      return root;
+    }
+    
     fileDescriptor = open(fullPath, O_CREAT | O_WRONLY, permissao);
 
     write(fileDescriptor, payload, numBytes);
 
     root = lista_add(root, fullPath, cliente, owner_permission, other_permission);
     close(fileDescriptor);
+    free(fullPath);
+    free(fullParentPath);
     return root;
 }
 
@@ -316,14 +372,27 @@ int file_info(char *path)
     return sb.st_size;
 }
 
-Lista * file_delete(Lista * root, char *path)
+Lista * file_delete(Lista * root, int cliente, char *path, char * parentPath)
 {
     int success;
-    char *fullPath;
+    char entryPermission;
+    char *fullPath, *fullParentPath;
 
     fullPath = get_current_directory();
+    fullParentPath = get_current_directory();
 
     strcat(fullPath, path);
+    strcat(fullParentPath, parentPath);
+
+    entryPermission = lista_get_entry_permission(root, fullParentPath, cliente);
+
+    if(!doIHavePermission('W',entryPermission))
+    {
+      printf("Voce nao tem permissao para deletar um arquivo nesse diretorio\n");
+      free(fullPath);
+      free(fullParentPath);
+      return root;
+    }
 
     success = remove(fullPath);
     if(success == -1)
@@ -331,6 +400,9 @@ Lista * file_delete(Lista * root, char *path)
       printf("Failed to delete %s\n", path);
     }
     root = lista_delete(root, fullPath);
+    free(fullPath);
+    free(fullParentPath);
+    return root;
 }
 
 Lista * file_modify(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char * parentPath, char * payload, int offset, int numBytes)
@@ -349,7 +421,7 @@ Lista * file_modify(Lista * root, int cliente, char owner_permission, char other
     if (numBytes == 0)
     {
         printf("Vou deletar\n");
-        root = file_delete(root, path);
+        root = file_delete(root, cliente, path, parentPath);
     }
     else if (lista_seek(root, fullChildPath))
     {
@@ -357,7 +429,7 @@ Lista * file_modify(Lista * root, int cliente, char owner_permission, char other
     }
     else if (lista_seek(root, fullParentPath))
     {
-        root = file_create(root, cliente, owner_permission, other_permission, path, payload, numBytes);
+        root = file_create(root, cliente, owner_permission, other_permission, path, parentPath, payload, numBytes);
     }
     else
     {
@@ -408,10 +480,15 @@ char* parentDirectory( char* path, int pathLength )
 
   i = 0;
 
-  while( i <= slashIndex)
+  while( i < slashIndex)
   {
     parent[i] = path[i];
     i++;
+  }
+  if(slashIndex == 0)
+  {
+    parent[0] = '/';
+    i = 1;
   }
   parent[i] = '\0';
 
@@ -458,6 +535,12 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
     char* newPath;
     int newPathLength;
     char* newPathLengthStr;
+
+    int owner;
+    char permission_owner;
+    char permission_other;
+    char ownerStr[3];
+    char permissionStr[5];
 
     int i = 0;
 
@@ -651,14 +734,20 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
         responseBuffer = (char*)malloc(sizeof(char)*BUFSIZE);
         strcpy(responseBuffer, "");
 
+        owner = get_owner(root, path);
+        permission_owner = get_permission(root, path, owner);
+        permission_other = get_permission(root, path, owner+1);
+        sprintf(ownerStr, "%d", owner);
+        sprintf(permissionStr, "%c-%c", permission_owner, permission_other);
+
         responseBuffer = strcat(responseBuffer, "FI-REP, ");
         responseBuffer = strcat(responseBuffer, path);
         responseBuffer = strcat(responseBuffer, ", ");
         responseBuffer = strcat(responseBuffer, pathLengthStr );
         responseBuffer = strcat(responseBuffer, ", ");
-        responseBuffer = strcat(responseBuffer, "OWNER");
+        responseBuffer = strcat(responseBuffer, ownerStr);
         responseBuffer = strcat(responseBuffer, ", ");
-        responseBuffer = strcat(responseBuffer, "PERMISSIONS");
+        responseBuffer = strcat(responseBuffer, permissionStr);
         responseBuffer = strcat(responseBuffer, ", ");
         responseBuffer = strcat(responseBuffer, fileLengthStr);
         responseBuffer = strcat(responseBuffer, ", ");
@@ -701,6 +790,7 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
         newPathLength = strlen(newPath);
         sprintf(newPathLengthStr, "%d", newPathLength);
         */
+        printf("Cheguei aqui\n");
         root = directory_create(root, clientId, ownerPermissionStr[0], otherPermissionStr[0], path, dirName);
 
         responseBuffer = (char*)malloc(sizeof(char)*BUFSIZE);
@@ -746,7 +836,7 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
         printf("cliente: %s", clientIdStr); 
         printf("\n");
         
-        root = directory_delete(root, path, dirName);
+        root = directory_delete(root, clientId, path, dirName);
 
         responseBuffer = (char*)malloc(sizeof(char)*BUFSIZE);
         strcpy(responseBuffer, "");

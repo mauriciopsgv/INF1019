@@ -59,15 +59,40 @@ int lista_seek(Lista * lista, char * path)
 	}
 }
 
-char lista_get_entry_permission(Lista * lista, char * path, int cliente)
+int lista_get_entry_client(Lista * lista, char * path)
 {
-	{
 	Lista * temp;
 	Lista * aux = lista;
 
 	if (lista == NULL)
 	{
 		printf("Nao existe nenhuma entrada no sistema de arquivos\n");
+		return -1;
+	}
+	else
+	{
+		while( aux != NULL)
+		{
+			if(strcmp(aux->path, path) == 0)
+			{
+				return aux->owner;
+			}
+			aux = aux->next;
+		}
+		return -1;
+	}
+}
+
+
+char lista_get_entry_permission(Lista * lista, char * path, int cliente)
+{
+	Lista * temp;
+	Lista * aux = lista;
+
+	if (lista == NULL)
+	{
+		printf("Nao existe nenhuma entrada no sistema de arquivos\n");
+		return 'N';
 	}
 	else
 	{
@@ -83,9 +108,8 @@ char lista_get_entry_permission(Lista * lista, char * path, int cliente)
 			}
 			aux = aux->next;
 		}
-		return FALSE;
+		return 'N';
 	}
-}
 }
 
 Lista * lista_delete(Lista * lista, char *path) {
@@ -134,11 +158,8 @@ void lista_print(Lista * lista) {
 	printf("Lista inteira\n");
 	while (aux->next != NULL)
 	{
-		printf("Entrei aqui\n");
 		printf(" %d %s -> ", (*aux).owner, (*aux).path);
 		aux = aux->next;
 	}
-	printf("Cheguei\n");
 	printf("%d %s\n", (*aux).owner, (*aux).path);
-	printf("Passei\n");
 }
