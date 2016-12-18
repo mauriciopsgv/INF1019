@@ -25,6 +25,8 @@
 extern  int alphasort(); 
 
 char* responseBuffer;
+char* directoryInfo;
+char* directoryPositions;
 
 /*
  * error - wrapper for perror
@@ -36,8 +38,7 @@ void error(char *msg) {
 
 int select_all_files(const struct dirent *entry)
 {
-  if ((entry->d_type == DT_DIR) ||
-      (strcmp(entry->d_name, ".") == 0) || 
+  if ((strcmp(entry->d_name, ".") == 0) || 
       (strcmp(entry->d_name, "..") == 0) )  
   {
     return (FALSE); 
@@ -96,10 +97,12 @@ Lista * directory_create(Lista * root, int cliente, char owner_permission, char 
 {   
     char *fullPath;
     mode_t permissao = S_IRWXU | S_IROTH | S_IWOTH | S_IXOTH;
-    
+
     fullPath = get_current_directory();
 
-    strcat(fullPath, "/SFS-root-di");
+
+    //strcat(fullPath, "/SFS-root-di");
+
     strcat(fullPath, path);
 
     if(strcmp(path, "/") != 0)
@@ -108,6 +111,8 @@ Lista * directory_create(Lista * root, int cliente, char owner_permission, char 
     }
     
     strcat(fullPath, dirName);
+
+    printf("%s \n", fullPath);
 
     mkdir(fullPath, permissao);
     root = lista_add(root, fullPath, cliente, owner_permission, other_permission);
@@ -119,8 +124,24 @@ Lista * directory_create(Lista * root, int cliente, char owner_permission, char 
 void directory_show_info(char *path)
 {   
     char *fullPath;
-    int count,i; 
-    struct direct **files; 
+    int count,i,j; 
+    struct direct **files;
+
+    int initialPosition;
+    int finalPosition;
+    int lastPosition;
+
+    char initialPositionStr[10];
+    char finalPositionStr[10]; 
+
+    j = 0;
+
+    //Aloca vetor com informações de diretório
+    directoryInfo = (char*)malloc(sizeof(char)*BUFSIZE);
+    strcpy(directoryInfo, "");
+    //Aloca vetor com posição das informações do diretorio
+    directoryPositions = (char*)malloc(sizeof(char)*BUFSIZE);
+    strcpy(directoryPositions, "");
 
     fullPath = get_current_directory();
 
@@ -137,8 +158,48 @@ void directory_show_info(char *path)
 
     printf("Number of files = %d\n",count); 
 
-    for (i=1;i<count+1;++i) 
+    for (i=1;i<count+1;++i)
+    { 
+      strcat(directoryInfo, files[i-1]->d_name);
+
+      if( j == 0 )
+      {
+        initialPosition = 0;
+        finalPosition = strlen(directoryInfo) - 1;
+        lastPosition = finalPosition;
+
+        sprintf(initialPositionStr, "%d", initialPosition);
+        sprintf(finalPositionStr, "%d", finalPosition);
+
+        strcat(directoryPositions,"{");
+        strcat(directoryPositions, initialPositionStr);
+        strcat(directoryPositions, ",");
+        strcat(directoryPositions, finalPositionStr);
+        strcat(directoryPositions, "}");
+      }
+      else
+      {
+        initialPosition = lastPosition + 1;
+        finalPosition = strlen(directoryInfo) - 1;
+        lastPosition = finalPosition;
+
+        sprintf(initialPositionStr, "%d", initialPosition);
+        sprintf(finalPositionStr, "%d", finalPosition);
+
+        //strcat(directoryPositions, "-");
+        strcat(directoryPositions,"{");
+        strcat(directoryPositions, initialPositionStr);
+        strcat(directoryPositions, ",");
+        strcat(directoryPositions, finalPositionStr);
+        strcat(directoryPositions, "}");
+      }
+
       printf("%s  ", files[i-1]->d_name);
+
+      j++;
+    }
+
+    printf("Directory Info: %s \n", directoryInfo);
 
     printf("\n"); /* flush buffer */ 
 }
@@ -149,7 +210,7 @@ Lista * directory_delete(Lista * root, char *path, char *dirName)
 
     fullPath = get_current_directory();
 
-    strcat(fullPath, "/SFS-root-di");
+    //strcat(fullPath, "/SFS-root-di");
     strcat(fullPath, path);
    
     if(strcmp(path, "/") != 0)
@@ -158,6 +219,8 @@ Lista * directory_delete(Lista * root, char *path, char *dirName)
     }
    
     strcat(fullPath, dirName);
+
+    printf("%s \n", fullPath);
 
     rmdir(fullPath);
     root = lista_delete(root, fullPath);
@@ -192,8 +255,6 @@ void file_read(Lista * root, int cliente, char *path, char * payload, int offset
     char *fullPath;
     char entryPermission;
 
-
-
     fullPath = get_current_directory();
     
     strcat(fullPath, path);
@@ -201,7 +262,7 @@ void file_read(Lista * root, int cliente, char *path, char * payload, int offset
     fileDescriptor = open(fullPath, O_RDONLY);
     pread(fileDescriptor, payload, numBytes, offset);
 
-    // printf("%s\n", payload);
+     //printf("%s\n", payload);
 
     for (i = 0; i < numBytes; i++)
     {
@@ -249,7 +310,10 @@ int file_info(char *path)
 
     stat(fullPath, &sb);
 
+    printf("oi\n");
     printf("Tamanho do arquivo: %d\n ", sb.st_size);
+    printf("oi\n");
+
     return sb.st_size;
 }
 
@@ -324,14 +388,31 @@ char* parentDirectory( char* path, int pathLength )
     i++;
   }
 
-  i = 0;
-  parent = (char*)malloc(sizeof(char)*slashIndex+1);
+  printf("\n");
+
+  i=0;
 
   while( i <= slashIndex)
+  {
+    printf("%c",path[i]);
+    i++;
+  }
+  printf("\n");
+
+  parent = (char*)malloc(sizeof(char)*(slashIndex+1));
+
+  i = 0;
+
+  while( i < slashIndex)
   {
     parent[i] = path[i];
     i++;
   }
+  parent[i] = '\0';
+
+  printf("%s", parent);
+  printf("\n");
+
   return parent;
 } 
 
@@ -339,7 +420,6 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
 {
     const char delimiters[] = " ";
     char *running;
-
 
     char *command;
     char *path;
@@ -349,9 +429,11 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
     //Arquivo
     char *payload;
     char *nrBytesStr;
+    char *nrBytesNOBUGEDStr;
     int nrBytes;
     char *offsetStr;
     int offset;
+    char *offsetNOBUGEDStr;
     char* parentPath;
 
     char *clientIdStr;
@@ -366,6 +448,13 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
     int dirNameLength;
 
     int fileLength;
+    char fileLengthStr[10];
+
+    char* newPath;
+    int newPathLength;
+    char* newPathLengthStr;
+
+    int i = 0;
 
     running = strdup(buff);
 
@@ -373,35 +462,61 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
     remove_coma(command);
     printf("Command: %s \n", command);
 
-
     //MANIPULACAO DE ARQUIVOS
     if( strcmp(command, "RD-REQ") == 0 )
     {
         //printf("oi");
         path =  strsep(&running, delimiters);
         remove_coma(path);
+        printf("\n");
+        printf("Path: %s", path); 
+        printf("\n");
 
         pathLengthStr = strsep(&running, delimiters);
         remove_coma(pathLengthStr);
         pathLength = atoi(pathLengthStr);
+        printf("\n");
+        printf("Path Length: %s", pathLengthStr); 
+        printf("\n");
 
         payload = strsep(&running, delimiters);
         remove_coma(payload);
+        printf("\n");
+        printf("Payload: %s", payload); 
+        printf("\n");
 
         nrBytesStr = strsep(&running, delimiters);
         remove_coma(nrBytesStr);
+        //gambiarra
+        nrBytesNOBUGEDStr = (char*)malloc(sizeof(char)*strlen(nrBytesStr));
+        strcpy(nrBytesNOBUGEDStr, nrBytesStr);
         nrBytes = atoi(nrBytesStr);
+        printf("\n");
+        printf("\nnrBytes: %s", nrBytesStr); 
+        printf("\n");
+
 
         offsetStr = strsep(&running, delimiters);
         remove_coma(offsetStr);
+        //gambiarra
+        offsetNOBUGEDStr = (char*)malloc(sizeof(char)*strlen(offsetStr));
+        strcpy(offsetNOBUGEDStr, offsetStr);
         offset = atoi(offsetStr);
+        printf("\n");
+        printf("Offset: %s", offsetStr); 
+        printf("\n");
 
         clientIdStr = strsep(&running, delimiters);
         remove_coma(clientIdStr);
         clientId = atoi(clientIdStr);
+        printf("\n");
+        printf("cliente: %s", clientIdStr); 
+        printf("\n");
 
         file_read(root, clientId, path, payload, offset, nrBytes);
 
+        responseBuffer = (char*)malloc(sizeof(char)*BUFSIZE);
+        strcpy(responseBuffer, "");
 
         responseBuffer = strcat(responseBuffer, "RD-REP, ");
         responseBuffer = strcat(responseBuffer, path);
@@ -410,10 +525,15 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
         responseBuffer = strcat(responseBuffer, ", ");
         responseBuffer = strcat(responseBuffer, payload);
         responseBuffer = strcat(responseBuffer, ", ");
-        //not sure of nrBytes
-        responseBuffer = strcat(responseBuffer, nrBytesStr);
+        responseBuffer = strcat(responseBuffer, nrBytesNOBUGEDStr);
         responseBuffer = strcat(responseBuffer, ", ");
-        responseBuffer = strcat(responseBuffer, offsetStr);
+        responseBuffer = strcat(responseBuffer, offsetNOBUGEDStr);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, clientIdStr);
+
+        printf("\n");
+        printf("%s", responseBuffer); 
+        printf("\n");    
     }
 
     if( strcmp(command, "WR-REQ") == 0 )
@@ -421,48 +541,87 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
         //printf("oi");
         path =  strsep(&running, delimiters);
         remove_coma(path);
+        printf("\n");
+        printf("Path: %s", path); 
+        printf("\n");
 
         pathLengthStr = strsep(&running, delimiters);
         remove_coma(pathLengthStr);
         pathLength = atoi(pathLengthStr);
+        printf("\n");
+        printf("Path Length: %s", pathLengthStr); 
+        printf("\n");
 
         payload = strsep(&running, delimiters);
         remove_coma(payload);
+        printf("\n");
+        printf("Payload: %s", payload); 
+        printf("\n");
 
         nrBytesStr = strsep(&running, delimiters);
         remove_coma(nrBytesStr);
+        //gambiarra
+        nrBytesNOBUGEDStr = (char*)malloc(sizeof(char)*strlen(nrBytesStr));
+        strcpy(nrBytesNOBUGEDStr, nrBytesStr);
         nrBytes = atoi(nrBytesStr);
+        printf("\n");
+        printf("\nnrBytes: %s", nrBytesStr); 
+        printf("\n");
 
         offsetStr = strsep(&running, delimiters);
         remove_coma(offsetStr);
+        //gambiarra
+        offsetNOBUGEDStr = (char*)malloc(sizeof(char)*strlen(offsetStr));
+        strcpy(offsetNOBUGEDStr, offsetStr);
         offset = atoi(offsetStr);
+        printf("\n");
+        printf("Offset: %s", offsetStr); 
+        printf("\n");
 
         clientIdStr = strsep(&running, delimiters);
         remove_coma(clientIdStr);
         clientId = atoi(clientIdStr);
+        printf("\n");
+        printf("cliente: %s", clientIdStr); 
+        printf("\n");
 
         ownerPermissionStr = strsep(&running, delimiters);
         remove_coma(ownerPermissionStr);
+        printf("\n");
+        printf("Owner permission: %s", ownerPermissionStr); 
+        printf("\n");
 
         otherPermissionStr = strsep(&running, delimiters);
         remove_coma(otherPermissionStr);
+        printf("\n");
+        printf("Other permission: %s", otherPermissionStr); 
+        printf("\n");
 
         parentPath = parentDirectory(path, pathLength);
 
         root = file_modify(root, clientId, ownerPermissionStr[0], otherPermissionStr[0], path, parentPath, payload, offset, nrBytes);
+
+        responseBuffer = (char*)malloc(sizeof(char)*BUFSIZE);
+        strcpy(responseBuffer, "");
 
         responseBuffer = strcat(responseBuffer, "WR-REP, ");
         responseBuffer = strcat(responseBuffer, path);
         responseBuffer = strcat(responseBuffer, ", ");
         responseBuffer = strcat(responseBuffer, pathLengthStr );
         responseBuffer = strcat(responseBuffer, ", ");
-        responseBuffer = strcat(responseBuffer, " ");
+        responseBuffer = strcat(responseBuffer, ""); // payload 
         responseBuffer = strcat(responseBuffer, ", ");
-        //not sure of nrBytes
-        responseBuffer = strcat(responseBuffer, nrBytesStr);
+        responseBuffer = strcat(responseBuffer, nrBytesNOBUGEDStr);
         responseBuffer = strcat(responseBuffer, ", ");
-        responseBuffer = strcat(responseBuffer, offsetStr);
-          //free(parentPath);
+        responseBuffer = strcat(responseBuffer, offsetNOBUGEDStr);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, clientIdStr);
+
+        // FAZER FLEI DE CRIAR ARQUIVO SE NAO EXISTIR AQUI 
+
+        printf("\n");
+        printf("%s", responseBuffer); 
+        printf("\n");   
     }
 
     if( strcmp(command, "FI-REQ") == 0 )
@@ -474,13 +633,37 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
         remove_coma(pathLengthStr);
         pathLength = atoi(pathLengthStr);
         
-        fileLength = file_info(path);        
+        fileLength = file_info(path);
+        sprintf(fileLengthStr, "%d", fileLength);
+
+        clientIdStr = strsep(&running, delimiters);
+        remove_coma(clientIdStr);
+        clientId = atoi(clientIdStr);
+        printf("\n");
+        printf("cliente: %s", clientIdStr); 
+        printf("\n");   
+
+        responseBuffer = (char*)malloc(sizeof(char)*BUFSIZE);
+        strcpy(responseBuffer, "");
+
+        responseBuffer = strcat(responseBuffer, "FI-REP, ");
+        responseBuffer = strcat(responseBuffer, path);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, pathLengthStr );
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, "OWNER");
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, "PERMISSIONS");
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, fileLengthStr);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, clientIdStr);
     }
 
     //MANIPULACAO DE DIRETORIOS
     if( strcmp(command, "DC-REQ") == 0 )
     {
-          //create_directory();
+        //create_directory();
         //Lista * directory_create(Lista * root, int cliente, char owner_permission, char other_permission, char *path, char *dirName)
         path =  strsep(&running, delimiters);
         remove_coma(path);
@@ -506,7 +689,30 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
         otherPermissionStr = strsep(&running, delimiters);
         remove_coma(otherPermissionStr);
 
+        /*
+        newPath = strcat(path,dirName);
+        printf("SAQUDNS : %s", path);
+
+        newPathLength = strlen(newPath);
+        sprintf(newPathLengthStr, "%d", newPathLength);
+        */
         root = directory_create(root, clientId, ownerPermissionStr[0], otherPermissionStr[0], path, dirName);
+
+        responseBuffer = (char*)malloc(sizeof(char)*BUFSIZE);
+        strcpy(responseBuffer, "");
+
+        responseBuffer = strcat(responseBuffer, "DC-REP, ");
+        responseBuffer = strcat(responseBuffer, path);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, pathLengthStr );
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, clientIdStr);
+
+        // FAZER FLEI DE CRIAR ARQUIVO SE NAO EXISTIR AQUI 
+
+        printf("\n");
+        printf("%s", responseBuffer); 
+        printf("\n");  
     }
 
     if( strcmp(command, "DR-REQ") == 0 )
@@ -527,34 +733,68 @@ Lista * parse_buff (char *buff, int *cmd, char *name, Lista *root )
         dirNameLengthStr = strsep(&running, delimiters);
         remove_coma(dirNameLengthStr);
         dirNameLength = atoi(dirNameLengthStr);
-        
-        /*
+              
         clientIdStr = strsep(&running, delimiters);
         remove_coma(clientIdStr);
         clientId = atoi(clientIdStr);
-
-        */
+        printf("\n");
+        printf("cliente: %s", clientIdStr); 
+        printf("\n");
+        
         root = directory_delete(root, path, dirName);
+
+        responseBuffer = (char*)malloc(sizeof(char)*BUFSIZE);
+        strcpy(responseBuffer, "");
+
+        responseBuffer = strcat(responseBuffer, "DR-REP, ");
+        //verificar se é esse mesmo o path
+        responseBuffer = strcat(responseBuffer, path);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, pathLengthStr );
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, clientIdStr);
+
+        // FAZER FLEI DE CRIAR ARQUIVO SE NAO EXISTIR AQUI 
+
+        printf("\n");
+        printf("%s", responseBuffer); 
+        printf("\n");  
     }
 
     if( strcmp(command, "DL-REQ") == 0 )
-    {
+    {   
         //void directory_show_info(char *path)
         path =  strsep(&running, delimiters);
         remove_coma(path);
+        printf("\n");
+        printf("Path: %s", path); 
+        printf("\n");
 
         pathLengthStr = strsep(&running, delimiters);
         remove_coma(pathLengthStr);
         pathLength = atoi(pathLengthStr);
+        printf("\n");
+        printf("path length: %s", pathLengthStr); 
+        printf("\n");
         
-
-        /*
         clientIdStr = strsep(&running, delimiters);
         remove_coma(clientIdStr);
         clientId = atoi(clientIdStr);
-        */
+        printf("\n");
+        printf("cliente: %s", clientIdStr); 
+        printf("\n");
 
         directory_show_info(path);
+
+        responseBuffer = (char*)malloc(sizeof(char)*BUFSIZE);
+        strcpy(responseBuffer, "");
+
+        responseBuffer = strcat(responseBuffer, "DL-REP, ");
+        responseBuffer = strcat(responseBuffer, directoryInfo);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, directoryPositions);
+        responseBuffer = strcat(responseBuffer, ", ");
+        responseBuffer = strcat(responseBuffer, clientIdStr); 
     }
 
     return root;
@@ -575,7 +815,6 @@ int main(int argc, char **argv) {
   char name[BUFSIZE];   // name of the file received from client
   int cmd;              // cmd received from client
 
-  //char responseBuff[BUFSIZE];
   char payloadToWriteFirst[BUFSIZE];
   char payloadToWriteSecond[BUFSIZE];
   char payloadToRead[BUFSIZE];
@@ -632,6 +871,7 @@ int main(int argc, char **argv) {
   root = lista_cria();
   root = create_initial_directory(root);
 
+  
   while (1)
   {
 
@@ -646,8 +886,6 @@ int main(int argc, char **argv) {
 
     lista_print(root);
     root = parse_buff(buff, &cmd, name, root);
-
-
 
     /*
      * gethostbyaddr: determine who sent the datagram
@@ -703,6 +941,8 @@ int main(int argc, char **argv) {
     if (n < 0)
       error("ERROR in sendto");
 
-   memset(responseBuffer,0,strlen(responseBuffer)); 
+  // memset(responseBuffer,0,strlen(responseBuffer)); 
+
   }
+
 }
